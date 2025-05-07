@@ -1234,7 +1234,7 @@ void Start_UART_TX_Task(void *argument)
 	osDelay(1);
 	osMessageQueueGet(UART_QueueHandle, &data, NULL, osWaitForever);
 	osMessageQueueGet(CtrlTsk_QueueHandle, &CtrlTsk_data, NULL, osWaitForever);
-
+	// ~38 variables sent
 	printf("x_desired=%lf,y_desired=%lf,phi_desired=%lf,d=%lf,r=%lf,roll=%lf,pitch=%lf,yaw=%lf,TIM1=%d,TIM2=%d,TIM4=%d,TIM8=%d,Enc_Wheel_Omega1=%.6f,Enc_Wheel_Omega2=%.6f,Enc_Wheel_Omega3=%.6f,Enc_Wheel_Omega4=%.6f,Inertial_ang_vel_calc=%.6f,Inertial_x_vel_calc=%.6f,Inertial_y_vel_calc=%.6f,ODOM_phi=%.3f,ODOM_x_pos=%.3f,ODOM_y_pos=%.3f,ODOM_Err_x=%0.3lf,ODOM_Err_y=%0.3lf,ODOM_Err_phi=%0.3lf,Ctrl_Inertial_x_dot=%.3f,Ctrl_Inertial_y_dot=%.3f,Ctrl_Inertial_phi_dot=%.3f,Ctrl_necc_u1=%.3f,Ctrl_necc_u2=%.3f,Ctrl_necc_u3=%.3f,Ctrl_necc_u4=%.3f,ts_current=%lu,ts_previous=%lu,ts_delta=%lu,Ctrl_duty_u1==%u,Ctrl_duty_u2==%u,Ctrl_duty_u3==%u,Ctrl_duty_u4==%u\r\n",
 			data.x_desired, data.y_desired, data.phi_end, data.d, data.r, imu->roll, imu->pitch, imu->yaw,
 			enc->cnt_vals[0], enc->cnt_vals[1], enc->cnt_vals[2], enc->cnt_vals[3], enc->omegaVals[0], enc->omegaVals[1], enc->omegaVals[2], enc->omegaVals[3],
