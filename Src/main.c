@@ -1370,6 +1370,9 @@ void StartControlTask(void *argument)
 		enc->omegaVals[2] = deltaEncCounts[2] * Rads_per_count / ts->delta;
 		enc->omegaVals[3] = deltaEncCounts[3] * Rads_per_count / ts->delta;
     } else {
+		BNO055_EulerVector = bno055_getVectorEuler();
+		imu->yaw = BNO055_EulerVector.x;  imu->roll = BNO055_EulerVector.y;  imu->pitch = BNO055_EulerVector.z;
+
     	ts->print_prev = ts->previous;
 		ts->current = osKernelGetTickCount();
 		ts->delta = ts->current - ts->previous;
