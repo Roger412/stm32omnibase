@@ -1132,11 +1132,6 @@ static uint8_t rx_char;               // Temporary char buffer
 void start_UART_RX_Task(void *argument)
 {
 	/* USER CODE BEGIN start_UART_RX_Task */
-//	osStatus_t status;
-//	Data data = {0, 0, 0, 0, 0};
-//
-//	char rx_buffer[64];           // Line buffer
-//	static int msg_id = 0;
 
 	char line_buf[RX_BUF_SIZE] = {0};
 	size_t line_index = 0;
