@@ -1133,6 +1133,7 @@ void start_UART_RX_Task(void *argument)
 {
 	/* USER CODE BEGIN start_UART_RX_Task */
 
+
 	char line_buf[RX_BUF_SIZE] = {0};
 	size_t line_index = 0;
 	InputData data = {0,0,0,1,1};
