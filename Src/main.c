@@ -68,7 +68,7 @@ UART_HandleTypeDef huart3;
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
   .name = "defaultTask",
-  .stack_size = 128 * 4,
+  .stack_size = 128 * 1,
   .priority = (osPriority_t) osPriorityNormal,
 };
 /* Definitions for UART_RX_Task */
@@ -134,20 +134,6 @@ void Start_UART_TX_Task(void *argument);
 void StartControlTask(void *argument);
 
 /* USER CODE BEGIN PFP */
-
-/*Function that sends the values of the Data struct parameter through UART2*/
-//void TASK_UART(Data* data) {
-//	/*TASK 4: SEND SERIAL DATA*/
-//	// Send the values of the Vehicle speed, engine speed, gear and throttle through the serial port, separated by commas
-//	osMutexWait(Mutex1Handle, osWaitForever);
-//	printf("%d,%d,%d,%d\n\r", data->x_desired, data->y_desired, data->phi_end ,data->d, data->r);
-//	osMutexRelease(Mutex1Handle);
-//}
-
-/*Funciton that returns the 8bit value received through UART2*/
-uint8_t TASK_UART_RECEIVE() {
-	return USER_USART1_Read_8bit();
-}
 
 /* USER CODE END PFP */
 
@@ -354,7 +340,7 @@ Error_Handler();
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   UART_QueueHandle = osMessageQueueNew (10, sizeof(InputData), &UART_Queue_attributes);
-  UART2CtrlTsk_QueueHandle = osMessageQueueNew (10, sizeof(InputData), &UART2CtrlTsk_Queue_attributes);
+  UART2CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART2CtrlTsk_Queue_attributes);
   CtrlTsk_QueueHandle = osMessageQueueNew (10, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
   /* USER CODE END RTOS_QUEUES */
 
