@@ -27,6 +27,7 @@
 #include <math.h>
 #include "bno055_stm32.h"
 #include "uart_rx.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -110,7 +111,17 @@ const osMessageQueueAttr_t CtrlTsk_Queue_attributes = {
 
 osMessageQueueId_t UART2CtrlTsk_QueueHandle;
 const osMessageQueueAttr_t UART2CtrlTsk_Queue_attributes = {
-  .name = "ControlTask_Queue"
+  .name = "UART2ControlTask_Queue"
+};
+
+osMessageQueueId_t UART2KPIDs_QueueHandle;
+const osMessageQueueAttr_t UART2KPIDs_Queue_attributes = {
+  .name = "UART2KPIDs_Queue"
+};
+
+osMessageQueueId_t kpids_UART_TX_QueueHandle;
+const osMessageQueueAttr_t kpids_UART_TX_Queue_attributes = {
+  .name = "kpids_UART_TX_Queue"
 };
 /* USER CODE END PV */
 
@@ -339,9 +350,11 @@ Error_Handler();
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
-  UART_QueueHandle = osMessageQueueNew (10, sizeof(InputData), &UART_Queue_attributes);
+  UART_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART_Queue_attributes);
   UART2CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART2CtrlTsk_Queue_attributes);
-  CtrlTsk_QueueHandle = osMessageQueueNew (10, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
+  CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
+  UART2KPIDs_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &UART2KPIDs_Queue_attributes);
+  kpids_UART_TX_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &kpids_UART_TX_Queue_attributes);
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
@@ -1123,6 +1136,17 @@ void start_UART_RX_Task(void *argument)
 	char line_buf[RX_BUF_SIZE] = {0};
 	size_t line_index = 0;
 	InputData data = {0,0,0,1,1};
+	PIDConfig kpids = {
+		.x_pid = {0.0f, 0.0f, 0.0f},
+		.y_pid = {0.0f, 0.0f, 0.0f},
+		.phi_pid = {0.0f, 0.0f, 0.0f},
+		.u_pid = {
+			{0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f},
+			{0.0f, 0.0f, 0.0f}
+		}
+	};
 
 	// Start the first interrupt reception
 	HAL_UART_Receive_IT(&huart3, &rx_char, 1);
@@ -1140,10 +1164,20 @@ void start_UART_RX_Task(void *argument)
 //					printf("📥 Full line received: \"%s\"\r\n", line_buf);
 
 					// Optional: parse float data
-					if (sscanf(line_buf, "%lf %lf %lf %lf %lf",
-							   &data.x_desired, &data.y_desired,
-							   &data.phi_end, &data.d, &data.r) == 5) {
+					if (sscanf(line_buf, "%lf %lf %lf %lf %lf %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f",
+					           &data.x_desired, &data.y_desired,
+					           &data.phi_end, &data.d, &data.r,
+					           &kpids.x_pid.Kp, &kpids.x_pid.Ki, &kpids.x_pid.Kd,
+					           &kpids.y_pid.Kp, &kpids.y_pid.Ki, &kpids.y_pid.Kd,
+					           &kpids.phi_pid.Kp, &kpids.phi_pid.Ki, &kpids.phi_pid.Kd,
+					           &kpids.u_pid[0].Kp, &kpids.u_pid[0].Ki, &kpids.u_pid[0].Kd,
+							   &kpids.u_pid[1].Kp, &kpids.u_pid[1].Ki, &kpids.u_pid[1].Kd,
+							   &kpids.u_pid[2].Kp, &kpids.u_pid[2].Ki, &kpids.u_pid[2].Kd,
+							   &kpids.u_pid[3].Kp, &kpids.u_pid[3].Ki, &kpids.u_pid[3].Kd) == 26)
+					{
 
+						osMessageQueuePut(UART2KPIDs_QueueHandle, &kpids, 0, 0);
+						osMessageQueuePut(kpids_UART_TX_QueueHandle, &kpids, 0, 0);
 						osMessageQueuePut(UART_QueueHandle, &data, 0, 0);
 						osMessageQueuePut(UART2CtrlTsk_QueueHandle, &data, 0, 0);
 //						printf("✅ Parsed: x=%.2f y=%.2f phi=%.2f d=%.2f r=%.2f\r\n",
@@ -1210,18 +1244,63 @@ void Start_UART_TX_Task(void *argument)
 	  for (int i = 0; i < 4; i++) {
 	      ctrl_out->PWM_vals[i] = 0.0;  ctrl_out->dutyCycles[i] = 0;  ctrl_out->M_dirs[i] = 0;
 	  }
+
+	  PIDConfig kpids = {
+	  	.x_pid = {0.0f, 0.0f, 0.0f},
+	  	.y_pid = {0.0f, 0.0f, 0.0f},
+	  	.phi_pid = {0.0f, 0.0f, 0.0f},
+	  	.u_pid = {
+	  		{0.0f, 0.0f, 0.0f},
+	  		{0.0f, 0.0f, 0.0f},
+	  		{0.0f, 0.0f, 0.0f},
+	  		{0.0f, 0.0f, 0.0f}
+	  	}
+	    };
+
+	    PIDGains *xPID_K   = &kpids.x_pid;
+	    PIDGains *yPID_K   = &kpids.y_pid;
+	    PIDGains *phiPID_K = &kpids.phi_pid;
+	    PIDGains *uPID_K   = kpids.u_pid;
+
   /* Infinite loop */
   for(;;)
   {
 	osDelay(1);
 	osMessageQueueGet(UART_QueueHandle, &data, NULL, osWaitForever);
+	osMessageQueueGet(kpids_UART_TX_QueueHandle, &kpids, NULL, osWaitForever);
 	osMessageQueueGet(CtrlTsk_QueueHandle, &CtrlTsk_data, NULL, osWaitForever);
-	// ~38 variables sent
-	printf("x_desired=%lf,y_desired=%lf,phi_desired=%lf,d=%lf,r=%lf,roll=%lf,pitch=%lf,yaw=%lf,TIM1=%d,TIM2=%d,TIM4=%d,TIM8=%d,Enc_Wheel_Omega1=%.6f,Enc_Wheel_Omega2=%.6f,Enc_Wheel_Omega3=%.6f,Enc_Wheel_Omega4=%.6f,Inertial_ang_vel_calc=%.6f,Inertial_x_vel_calc=%.6f,Inertial_y_vel_calc=%.6f,ODOM_phi=%.3f,ODOM_x_pos=%.3f,ODOM_y_pos=%.3f,ODOM_Err_x=%0.3lf,ODOM_Err_y=%0.3lf,ODOM_Err_phi=%0.3lf,Ctrl_Inertial_x_dot=%.3f,Ctrl_Inertial_y_dot=%.3f,Ctrl_Inertial_phi_dot=%.3f,Ctrl_necc_u1=%.3f,Ctrl_necc_u2=%.3f,Ctrl_necc_u3=%.3f,Ctrl_necc_u4=%.3f,ts_current=%lu,ts_previous=%lu,ts_delta=%lu,Ctrl_duty_u1=%u,Ctrl_duty_u2=%u,Ctrl_duty_u3=%u,Ctrl_duty_u4=%u\r\n",
-			data.x_desired, data.y_desired, data.phi_end, data.d, data.r, imu->roll, imu->pitch, imu->yaw,
-			enc->cnt_vals[0], enc->cnt_vals[1], enc->cnt_vals[2], enc->cnt_vals[3], enc->omegaVals[0], enc->omegaVals[1], enc->omegaVals[2], enc->omegaVals[3],
-			odom->q_dot[0],odom->q_dot[1],odom->q_dot[2], odom->phi,odom->x_pos,odom->y_pos, err->err_x, err->err_y, err->err_phi, ctrl_out->x_dot, ctrl_out->y_dot, ctrl_out->phi_dot,
-			ctrl_out->u[0], ctrl_out->u[1], ctrl_out->u[2], ctrl_out->u[3], ts->current, ts->print_prev, ts->delta, ctrl_out->dutyCycles[0], ctrl_out->dutyCycles[1], ctrl_out->dutyCycles[2], ctrl_out->dutyCycles[3]);
+	// ~60 variables sent
+	printf("x_desired=%lf,y_desired=%lf,phi_desired=%lf,d=%lf,r=%lf,"
+			"roll=%lf,pitch=%lf,yaw=%lf,"
+			"TIM1=%d,TIM2=%d,TIM4=%d,TIM8=%d,"
+			"Enc_Wheel_Omega1=%.6f,Enc_Wheel_Omega2=%.6f,Enc_Wheel_Omega3=%.6f,Enc_Wheel_Omega4=%.6f,"
+			"Inertial_ang_vel_calc=%.6f,Inertial_x_vel_calc=%.6f,Inertial_y_vel_calc=%.6f,"
+			"ODOM_phi=%.3f,ODOM_x_pos=%.3f,ODOM_y_pos=%.3f,ODOM_Err_x=%0.3lf,ODOM_Err_y=%0.3lf,ODOM_Err_phi=%0.3lf,"
+			"Ctrl_Inertial_x_dot=%.3f,Ctrl_Inertial_y_dot=%.3f,Ctrl_Inertial_phi_dot=%.3f,Ctrl_necc_u1=%.3f,Ctrl_necc_u2=%.3f,Ctrl_necc_u3=%.3f,Ctrl_necc_u4=%.3f,"
+			"ts_current=%lu,ts_previous=%lu,ts_delta=%lu,"
+			"Ctrl_duty_u1=%u,Ctrl_duty_u2=%u,Ctrl_duty_u3=%u,Ctrl_duty_u4=%u,"
+			"xKp=%.3f,xKi=%.3f,xKd=%.3f,"
+			"yKp=%.3f,yKi=%.3f,yKd=%.3f,"
+			"phiKp=%.3f,phiKi=%.3f,phiKd=%.3f,"
+			"u0Kp=%.3f,u0Ki=%.3f,u0Kd=%.3f,"
+			"u1Kp=%.3f,u1Ki=%.3f,u1Kd=%.3f,"
+			"u2Kp=%.3f,u2Ki=%.3f,u2Kd=%.3f,"
+			"u3Kp=%.3f,u3Ki=%.3f,u3Kd=%.3f\r\n",
+			data.x_desired, data.y_desired, data.phi_end, data.d, data.r,
+			imu->roll, imu->pitch, imu->yaw,
+			enc->cnt_vals[0], enc->cnt_vals[1], enc->cnt_vals[2], enc->cnt_vals[3],
+			enc->omegaVals[0], enc->omegaVals[1], enc->omegaVals[2], enc->omegaVals[3],
+			odom->q_dot[0],odom->q_dot[1],odom->q_dot[2], odom->phi,odom->x_pos,odom->y_pos, err->err_x, err->err_y, err->err_phi,
+			ctrl_out->x_dot, ctrl_out->y_dot, ctrl_out->phi_dot, ctrl_out->u[0], ctrl_out->u[1], ctrl_out->u[2], ctrl_out->u[3],
+			ts->current, ts->print_prev, ts->delta, ctrl_out->dutyCycles[0],
+			ctrl_out->dutyCycles[1], ctrl_out->dutyCycles[2], ctrl_out->dutyCycles[3],
+			xPID_K->Kp, xPID_K->Ki, xPID_K->Kd,
+			yPID_K->Kp, yPID_K->Ki, yPID_K->Kd,
+			phiPID_K->Kp, phiPID_K->Ki, phiPID_K->Kd,
+			uPID_K[0].Kp, uPID_K[0].Ki, uPID_K[0].Kd,
+			uPID_K[1].Kp, uPID_K[1].Ki, uPID_K[1].Kd,
+			uPID_K[2].Kp, uPID_K[2].Ki, uPID_K[2].Kd,
+			uPID_K[3].Kp, uPID_K[3].Ki, uPID_K[3].Kd);
 
     osDelay(10);
   }
@@ -1251,17 +1330,17 @@ void StartControlTask(void *argument)
 
   double u_err_trshld = 0.1;
 
-  float PID_K_oneM[3] = {0.5,0.003,0.0};
-  float xPID_K[3] = {0.5,0.003,0.0};
-  float yPID_K[3] = {0.5,0.003,0.0};
-  float phiPID_K[3] = {0.5,0.003,0.0};
-  float uPID_K[4][3] = {{1,0,0},{1,0,0},{1,0,0},{0,0,0}};
+//  float PID_K_oneM[3] = {0.5,0.003,0.0};
+//  float xPID_K[3] = {0.5,0.003,0.0};
+//  float yPID_K[3] = {0.5,0.003,0.0};
+//  float phiPID_K[3] = {0.5,0.003,0.0};
+//  float uPID_K[4][3] = {{1,0,0},{1,0,0},{1,0,0},{0,0,0}};
 
-  for (int i = 0; i < 4; i++) {
-	  for (int j = 0; j < 3; j++) {
-		  uPID_K[i][j] = PID_K_oneM[j];
-	  }
-  }
+//  for (int i = 0; i < 4; i++) {
+//	  for (int j = 0; j < 3; j++) {
+//		  uPID_K[i][j] = PID_K_oneM[j];
+//	  }
+//  }
 
   float xTrshld = 0.01; // Allowed error cm
   float yTrshld = 0.01; // Allowed error cm
@@ -1287,6 +1366,23 @@ void StartControlTask(void *argument)
   TimeState    *ts       = &CtrlTsk_data.time;
   OdomData     *odom     = &CtrlTsk_data.odom;
   CtrlOutData  *ctrl_out = &CtrlTsk_data.ctrl;
+
+  PIDConfig kpids = {
+	.x_pid = {0.0f, 0.0f, 0.0f},
+	.y_pid = {0.0f, 0.0f, 0.0f},
+	.phi_pid = {0.0f, 0.0f, 0.0f},
+	.u_pid = {
+		{0.0f, 0.0f, 0.0f},
+		{0.0f, 0.0f, 0.0f},
+		{0.0f, 0.0f, 0.0f},
+		{0.0f, 0.0f, 0.0f}
+	}
+  };
+
+  PIDGains *xPID_K   = &kpids.x_pid;
+  PIDGains *yPID_K   = &kpids.y_pid;
+  PIDGains *phiPID_K = &kpids.phi_pid;
+  PIDGains *uPID_K   = kpids.u_pid;
 
   imu->yaw = 0.0;  imu->roll = 0.0;  imu->pitch = 0.0;
 
@@ -1382,9 +1478,10 @@ void StartControlTask(void *argument)
 
 
 /*------------------------------------------------------------------------*/
-/**************** 2. Receive desired pose from UART QUEUE *****************/
+/**************** 2. Receive desired pose/pidKs from UART *****************/
 
 	osMessageQueueGet(UART2CtrlTsk_QueueHandle, &data, NULL, osWaitForever);
+	osMessageQueueGet(UART2KPIDs_QueueHandle, &kpids, NULL, osWaitForever);
 
 /**************************************************************************/
 /*------------------------------------------------------------------------*/
@@ -1407,13 +1504,13 @@ void StartControlTask(void *argument)
 
 	if (abs(err->err_x) > xTrshld){
 		sumKI_x += err->err_x * ts->delta;
-		ctrl_out->x_dot = xPID_K[0]*err->err_x + xPID_K[1]*sumKI_x + xPID_K[2] * (err->err_x / ts->delta);
+		ctrl_out->x_dot = xPID_K->Kp*err->err_x + xPID_K->Ki*sumKI_x + xPID_K->Kd * (err->err_x / ts->delta);
 		ctrl_out->phi_dot = 0;
 	}
 
 	if (abs(err->err_y) > yTrshld){
 		sumKI_y += err->err_y * ts->delta;
-		ctrl_out->y_dot = yPID_K[0]*err->err_y + yPID_K[1]*sumKI_y + yPID_K[2] * (err->err_y / ts->delta);
+		ctrl_out->y_dot = yPID_K->Kp*err->err_y + yPID_K->Ki*sumKI_y + yPID_K->Kd * (err->err_y / ts->delta);
 		ctrl_out->phi_dot = 0;
 	}
 
@@ -1423,7 +1520,7 @@ void StartControlTask(void *argument)
 
 		if (abs(err->err_phi) > phiTrshld){
 			sumKI_phi += err->err_phi * ts->delta;
-			ctrl_out->phi_dot = phiPID_K[0]*err->err_phi + phiPID_K[1]*sumKI_phi + phiPID_K[2] * (err->err_phi / ts->delta);
+			ctrl_out->phi_dot = phiPID_K->Kp*err->err_phi + phiPID_K->Ki*sumKI_phi + phiPID_K->Kd * (err->err_phi / ts->delta);
 		}
 	}
 
@@ -1447,11 +1544,13 @@ void StartControlTask(void *argument)
 /*------------------------------------------------------------------------*/
 /***************************** 6. MOTOR PIDs *******************************/
 
+
+
 	for (int i = 0; i < 4; i++) {
 		err->u_errs[i] = ctrl_out->u[i] - enc->omegaVals[i];
 		if (abs(err->u_errs[i]) > u_err_trshld){
 			sumKI_u_errs[i] += err->u_errs[i] * ts->delta;
-			ctrl_out->PWM_vals[i] = uPID_K[i][0]*err->u_errs[i] + uPID_K[i][1]*sumKI_u_errs[i] + uPID_K[i][2] * (err->u_errs[i] / ts->delta);
+			ctrl_out->PWM_vals[i] = uPID_K[i].Kp*err->u_errs[i] + uPID_K[i].Ki*sumKI_u_errs[i] + uPID_K[i].Kd * (err->u_errs[i] / ts->delta);
 		}
 		else {
 			sumKI_u_errs[i] = 0; // Reset Integral part if error small
