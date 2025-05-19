@@ -90,7 +90,7 @@ const osThreadAttr_t UART_TX_Task_attributes = {
 osThreadId_t ControlTaskHandle;
 const osThreadAttr_t ControlTask_attributes = {
   .name = "ControlTask",
-  .stack_size = 256 * 16,
+  .stack_size = 256 * 20,
   .priority = (osPriority_t) osPriorityAboveNormal,
 };
 /* Definitions for UART_Queue */
@@ -352,7 +352,7 @@ Error_Handler();
   /* add queues, ... */
   UART_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART_Queue_attributes);
   UART2CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART2CtrlTsk_Queue_attributes);
-  CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
+  CtrlTsk_QueueHandle = osMessageQueueNew (10, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
   UART2KPIDs_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &UART2KPIDs_Queue_attributes);
   kpids_UART_TX_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &kpids_UART_TX_Queue_attributes);
   /* USER CODE END RTOS_QUEUES */
@@ -1612,9 +1612,7 @@ void StartControlTask(void *argument)
 
 	queue_status = osMessageQueuePut(CtrlTsk_QueueHandle, &CtrlTsk_data, 0, 0);
 
-	if (queue_status == osOK) {
-//	    printf("✅ Message enqueued successfully!\r\n");
-	} else {
+	if (queue_status != osOK) {
 	    printf("❌ Failed to enqueue message! Error code: %d\r\n", queue_status);
 	}
   }
