@@ -352,7 +352,7 @@ Error_Handler();
   /* add queues, ... */
   UART_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART_Queue_attributes);
   UART2CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(InputData), &UART2CtrlTsk_Queue_attributes);
-  CtrlTsk_QueueHandle = osMessageQueueNew (10, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
+  CtrlTsk_QueueHandle = osMessageQueueNew (5, sizeof(CtrlTsk_Data), &CtrlTsk_Queue_attributes);
   UART2KPIDs_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &UART2KPIDs_Queue_attributes);
   kpids_UART_TX_QueueHandle = osMessageQueueNew (5, sizeof(PIDConfig), &kpids_UART_TX_Queue_attributes);
   /* USER CODE END RTOS_QUEUES */
@@ -1152,6 +1152,7 @@ void start_UART_RX_Task(void *argument)
 	HAL_UART_Receive_IT(&huart3, &rx_char, 1);
 	/* Infinite loop */
 	for (;;) {
+//		printf("alive2\r\n");
 		// Check if data is available
 		while (rx_head != rx_tail) {
 			uint8_t byte = rx_buf[rx_head];
@@ -1261,6 +1262,8 @@ void Start_UART_TX_Task(void *argument)
 	    PIDGains *yPID_K   = &kpids.y_pid;
 	    PIDGains *phiPID_K = &kpids.phi_pid;
 	    PIDGains *uPID_K   = kpids.u_pid;
+
+//	    printf("alive\r\n");
 
   /* Infinite loop */
   for(;;)
